@@ -23,6 +23,7 @@ provider "vcd" {
   org                  = var.vcd_org_name
   vdc                  = var.vcd_vdc_name
   allow_unverified_ssl = var.allow_insecure
+  logging              = var.logging
 }
 
 locals {
@@ -63,11 +64,28 @@ resource "vcd_vapp" "cluster" {
   name        = var.cluster_name
   description = "vApp for ${var.vcd_vdc_name} cluster"
 
-  metadata = {
-    provisioner  = "Kubeone"
-    cluster_name = "${var.cluster_name}"
-    type         = "Kubernetes Cluster"
+  metadata_entry {
+    key         = "provisioner"
+    value       = "KubeOne"
+    type        = "MetadataStringValue"
+    user_access = "READWRITE"
+    is_system   = false
   }
+  metadata_entry {
+    key         = "cluster_name"
+    value       = var.cluster_name
+    type        = "MetadataStringValue"
+    user_access = "READWRITE"
+    is_system   = false
+  }
+  metadata_entry {
+    key         = "type"
+    value       = "Kubernetes Cluster"
+    type        = "MetadataStringValue"
+    user_access = "READWRITE"
+    is_system   = false
+  }
+
 
   depends_on = [vcd_network_routed.network]
 }
@@ -97,10 +115,26 @@ resource "vcd_vapp_vm" "control_plane" {
   name          = "${var.cluster_name}-cp-${count.index + 1}"
   computer_name = "${var.cluster_name}-cp-${count.index + 1}"
 
-  metadata = {
-    provisioner  = "Kubeone"
-    cluster_name = "${var.cluster_name}"
-    role         = "control-plane"
+  metadata_entry {
+    key         = "provisioner"
+    value       = "KubeOne"
+    type        = "MetadataStringValue"
+    user_access = "READWRITE"
+    is_system   = false
+  }
+  metadata_entry {
+    key         = "cluster_name"
+    value       = var.cluster_name
+    type        = "MetadataStringValue"
+    user_access = "READWRITE"
+    is_system   = false
+  }
+  metadata_entry {
+    key         = "role"
+    value       = "control-plane"
+    type        = "MetadataStringValue"
+    user_access = "READWRITE"
+    is_system   = false
   }
 
   guest_properties = {
@@ -169,4 +203,14 @@ resource "vcd_nsxv_snat" "rule_internet" {
 
   original_address   = "${var.gateway_ip}/24"
   translated_address = local.external_network_ip
+}
+
+# Create Hairpin SNAT rule
+resource "vcd_nsxv_snat" "rule_internal" {
+  edge_gateway = data.vcd_edgegateway.edge_gateway.name
+  network_type = "org"
+  network_name = vcd_network_routed.network.name
+
+  original_address   = "${var.gateway_ip}/24"
+  translated_address = var.gateway_ip
 }
